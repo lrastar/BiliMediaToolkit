@@ -27,12 +27,12 @@ export const CODEC_ALIAS = {
 export const AUDIO_QUALITY_MAP = {
   hires: 30251,
   dolby: 30250,
-  '320k': 30280,
+  '192k': 30280,
   '128k': 30232
 };
 
 export const AUDIO_QUALITY = {
-  '30280': '320kbps',
+  '30280': '192kbps',
   '30232': '128kbps',
   '30216': '64kbps'
 };
@@ -40,7 +40,7 @@ export const AUDIO_QUALITY = {
 export const AUDIO_QUALITY_LABEL = {
   30251: 'Hi-Res',
   30250: '杜比全景声',
-  30280: '320K',
+  30280: '192K',
   30232: '128K',
   30216: '64K'
 };

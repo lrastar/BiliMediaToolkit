@@ -24,7 +24,7 @@ const CODEC_OPTIONS = [
 const AUDIO_OPTIONS = [
   { value: 'hires', label: 'Hi-Res 无损' },
   { value: 'dolby', label: '杜比全景声' },
-  { value: '320k', label: '320kbps' },
+  { value: '192k', label: '192kbps' },
   { value: '128k', label: '128kbps' }
 ]
 
