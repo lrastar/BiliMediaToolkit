@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 
 const navItems = [
   { path: '/', label: '下载' },
+  { path: '/bangumi', label: '番剧' },
   { path: '/live', label: '直播' },
   { path: '/history', label: '历史' },
   { path: '/settings', label: '设置' }

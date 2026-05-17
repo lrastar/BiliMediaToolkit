@@ -329,6 +329,120 @@ router.post('/bangumi/stream', async (req, res) => {
   }
 });
 
+router.post('/bangumi/download', async (req, res) => {
+  try {
+    const { tasks } = req.body;
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return res.status(400).json({ code: -1, message: 'tasks array is required' });
+    }
+
+    const config = getConfig();
+    const taskIds = [];
+
+    for (const task of tasks) {
+      const safeTitle = (task.title || task.ep_id || 'video').replace(/[\\/:*?"<>|]/g, '_');
+
+      const taskId = taskQueue.add({
+        type: 'video',
+        title: safeTitle,
+        execute: async ({ abortSignal, onProgress }) => {
+          const streamData = await getBangumiStream(task.ep_id, task.qn || 127);
+          if (streamData.code !== 0) {
+            throw new Error(streamData.message || 'Failed to get stream url');
+          }
+          const options = parseStreamOptions(streamData);
+
+          const targetQn = parseInt(task.qn, 10) || 127;
+          const targetCodec = CODEC_ALIAS[task.codec] || task.codec;
+          const targetAudioId = AUDIO_QUALITY_MAP[task.audioQuality]
+            || (typeof task.audioQuality === 'number' ? task.audioQuality : null);
+
+          let videoStream = null;
+          if (targetCodec) {
+            videoStream = options.video.find(v => v.codec === targetCodec && v.id === targetQn);
+          }
+          if (!videoStream && targetCodec) {
+            videoStream = options.video.find(v => v.codec === targetCodec);
+          }
+          if (!videoStream) {
+            videoStream = options.video.find(v => v.id === targetQn);
+          }
+          if (!videoStream) {
+            videoStream = options.video[0];
+          }
+
+          let audioStream = null;
+          if (targetAudioId) {
+            audioStream = options.audio.find(a => a.id === targetAudioId);
+          }
+          if (!audioStream) {
+            audioStream = options.audio.find(a => a.type === 'normal');
+          }
+          if (!audioStream) {
+            audioStream = options.audio[0];
+          }
+
+          if (!videoStream || !audioStream) {
+            throw new Error('No available stream found');
+          }
+
+          if (task.mode === 'audio-only') {
+            const audioFormat = task.audioFormat || config.audioFormat || 'mp3';
+            const audioOutputPath = resolve(config.downloadPath, `${safeTitle}.${audioFormat}`);
+            await downloadAudioOnly(audioStream.baseUrl, audioOutputPath, audioFormat, {
+              abortSignal,
+              onProgress
+            });
+            addRecord({
+              title: safeTitle,
+              url: `https://www.bilibili.com/bangumi/play/ep${task.ep_id}`,
+              type: 'audio',
+              quality: '',
+              format: audioFormat,
+              filePath: audioOutputPath,
+              fileSize: getFileSize(audioOutputPath),
+              status: 'completed'
+            });
+          } else {
+            const qnLabel = VIDEO_QUALITY_LABEL[videoStream.id] || String(videoStream.id);
+            const codecLabel = videoStream.codec || '';
+            const audioLabel = AUDIO_QUALITY_LABEL[audioStream.id] || '';
+
+            const tags = [];
+            if (qnLabel) tags.push(`[${qnLabel}]`);
+            if (codecLabel) tags.push(`[${codecLabel}]`);
+            if (audioLabel) tags.push(`[${audioLabel}]`);
+
+            const finalFilename = tags.length > 0 ? `${safeTitle} ${tags.join('')}.mkv` : `${safeTitle}.mkv`;
+            const outputPath = resolve(config.downloadPath, finalFilename);
+
+            await downloadDASH(videoStream.baseUrl, audioStream.baseUrl, outputPath, {
+              abortSignal,
+              onProgress
+            });
+            addRecord({
+              title: safeTitle,
+              url: `https://www.bilibili.com/bangumi/play/ep${task.ep_id}`,
+              type: 'video',
+              quality: task.qn ? String(task.qn) : '',
+              format: 'mkv',
+              filePath: outputPath,
+              fileSize: getFileSize(outputPath),
+              status: 'completed'
+            });
+          }
+        }
+      });
+
+      taskIds.push(taskId);
+    }
+
+    res.json({ code: 0, data: { taskIds } });
+  } catch (err) {
+    res.status(500).json({ code: -1, message: err.message });
+  }
+});
+
 router.post('/collection', async (req, res) => {
   try {
     const { mid, series_id } = req.body;
