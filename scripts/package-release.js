@@ -1,14 +1,6 @@
 
-#!/usr/bin/env node
-
 import { execSync } from 'child_process';
-import {
-  mkdirSync,
-  copyFileSync,
-  rmSync,
-  writeFileSync,
-  readFileSync
-} from 'fs';
+import { mkdirSync, copyFileSync, rmSync, writeFileSync, readFileSync, existsSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -18,21 +10,21 @@ const rootDir = join(__dirname, '..');
 const outputDir = join(rootDir, 'releases');
 const tempBuildDir = join(outputDir, 'BiliMediaToolkit');
 
-console.log('🚀 开始打包 BiliMediaToolkit...');
+console.log('Start packaging BiliMediaToolkit...');
 
 try {
-  console.log('\n📁 清理旧文件...');
+  console.log('\nCleaning old files...');
   rmSync(outputDir, { recursive: true, force: true });
   mkdirSync(outputDir, { recursive: true });
   mkdirSync(tempBuildDir, { recursive: true });
 
-  console.log('\n🏗️  构建前端...');
-  execSync('cd client && npm run build', {
+  console.log('\nBuilding frontend...');
+  execSync('cd client &amp;&amp; npm run build', {
     cwd: rootDir,
     stdio: 'inherit'
   });
 
-  console.log('\n📦 复制文件...');
+  console.log('\nCopying files...');
   
   const copyItems = [
     ['server', join(tempBuildDir, 'server')],
@@ -42,41 +34,20 @@ try {
     ['README.md', join(tempBuildDir, 'README.md')]
   ];
 
-  copyItems.forEach(([src, dest]) => {
+  copyItems.forEach(([src, dest]) =&gt; {
     const srcPath = join(rootDir, src);
     copyRecursive(srcPath, dest);
   });
 
-  console.log('\n📝 生成启动脚本...');
+  console.log('\nGenerating startup scripts...');
   writeFileSync(
     join(tempBuildDir, 'start.bat'),
-    `@echo off
-title BiliMediaToolkit
-chcp 65001 >nul
-echo [INFO] 正在启动 BiliMediaToolkit...
-cd server
-echo [INFO] 正在安装依赖...
-if not exist "node_modules" (
-  npm install --no-audit --no-fund
-)
-echo [INFO] 正在启动服务器...
-node index.js
-pause
-`
+    '@echo off\ntitle BiliMediaToolkit\nchcp 65001 &gt;nul\necho [INFO] Starting BiliMediaToolkit...\ncd server\necho [INFO] Installing dependencies...\nif not exist "node_modules" (\n  npm install --no-audit --no-fund\n)\necho [INFO] Starting server...\nnode index.js\npause\n'
   );
 
   writeFileSync(
     join(tempBuildDir, 'start.sh'),
-    `#!/bin/bash
-echo "[INFO] 正在启动 BiliMediaToolkit..."
-cd server
-echo "[INFO] 正在安装依赖..."
-if [ ! -d "node_modules" ]; then
-  npm install --no-audit --no-fund
-fi
-echo "[INFO] 正在启动服务器..."
-node index.js
-`
+    '#!/bin/bash\necho "[INFO] Starting BiliMediaToolkit..."\ncd server\necho "[INFO] Installing dependencies..."\nif [ ! -d "node_modules" ]; then\n  npm install --no-audit --no-fund\nfi\necho "[INFO] Starting server..."\nnode index.js\n'
   );
 
   const pkgJson = JSON.parse(readFileSync(join(tempBuildDir, 'package.json'), 'utf-8'));
@@ -92,47 +63,27 @@ node index.js
     }, null, 2)
   );
 
-  const gitignoreContent = `node_modules
-ffmpeg.exe
-ffmpeg
-downloads
-data
-*.tmp
-*.log
-.DS_Store
-`;
+  const gitignoreContent = 'node_modules\nffmpeg.exe\nffmpeg\ndownloads\ndata\n*.tmp\n*.log\n.DS_Store\n';
   writeFileSync(join(tempBuildDir, '.gitignore'), gitignoreContent);
 
-  console.log('\n✅ 打包完成！');
-  console.log(`输出目录: ${tempBuildDir}`);
-  console.log(`\n启动方式:`);
-  console.log(`Windows: 双击 start.bat`);
-  console.log(`Linux/macOS: 执行 bash start.sh`);
+  console.log('\nPackaging complete!');
+  console.log('Output directory: ' + tempBuildDir);
+  console.log('\nStartup:');
+  console.log('Windows: Double-click start.bat');
+  console.log('Linux/macOS: Run bash start.sh');
 
 } catch (error) {
-  console.error('\n❌ 打包失败:', error);
+  console.error('\nPackaging failed:', error);
   process.exit(1);
 }
 
 function copyRecursive(src, dest) {
-  const stat = (path) => {
-    try {
-      return {
-        exists: true,
-        isDirectory: () => require('fs').statSync(path).isDirectory()
-      };
-    } catch {
-      return { exists: false, isDirectory: () => false };
-    }
-  };
-
-  const s = stat(src);
-  if (!s.exists) {
-    console.warn(`⚠️  跳过不存在: ${src}`);
+  if (!existsSync(src)) {
+    console.warn('Skip non-existent: ' + src);
     return;
   }
 
-  if (s.isDirectory()) {
+  if (statSync(src).isDirectory()) {
     mkdirSync(dest, { recursive: true });
     const files = require('fs').readdirSync(src);
     for (const file of files) {

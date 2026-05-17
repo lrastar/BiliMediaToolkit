@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -48,23 +48,23 @@ jobs:
           body: |
             # BiliMediaToolkit ${{ steps.get_version.outputs.VERSION }}
             
-            ## 更新内容
-            - 自动打包发布
+            ## Release Notes
+            - Initial release
             
-            ## 安装使用
-            1. 下载并解压 `BiliMediaToolkit.zip`
-            2. 进入解压目录
-            3. Windows 用户：双击运行 `start.bat`
-            4. Linux/macOS 用户：执行 `bash start.sh`
-            5. 在浏览器打开 http://localhost:3000 即可使用
+            ## How to use
+            1. Download and extract `BiliMediaToolkit.zip`
+            2. Enter the extracted directory
+            3. Windows: Double-click `start.bat`
+            4. Linux/macOS: Run `bash start.sh`
+            5. Open http://localhost:3000 in your browser
             
-            ## 功能特性
-            - 支持 AV1/HEVC/AVC 编码选择
-            - 支持杜比视界/HDR 真彩/4K/1080P+ 等高画质
-            - 支持杜比全景声/Hi-Res 无损音频
-            - 批量下载
-            - 历史记录
-            - 扫码登录
+            ## Features
+            - Support for AV1/HEVC/AVC codec selection
+            - Support for Dolby Vision/HDR/4K/1080P+ quality
+            - Support for Dolby Atmos/Hi-Res audio
+            - Batch downloading
+            - Download history
+            - QR code login
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
