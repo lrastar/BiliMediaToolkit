@@ -12,6 +12,7 @@ import {
 import { downloadDASH, downloadAudioOnly, taskQueue, getFileSize } from '../lib/downloader.js';
 import { getConfig } from '../lib/config.js';
 import { addRecord } from '../lib/database.js';
+import { CODEC_ALIAS, AUDIO_QUALITY_MAP } from '../lib/constants.js';
 
 const router = Router();
 
@@ -110,16 +111,34 @@ router.post('/download/batch', async (req, res) => {
           }
           const options = parseStreamOptions(streamData);
 
-          let videoStream = options.video[0];
-          if (task.codec) {
-            const matched = options.video.find(v => v.codec === task.codec);
-            if (matched) videoStream = matched;
+          const targetQn = parseInt(task.qn, 10) || 127;
+          const targetCodec = CODEC_ALIAS[task.codec] || task.codec;
+          const targetAudioId = AUDIO_QUALITY_MAP[task.audioQuality]
+            || (typeof task.audioQuality === 'number' ? task.audioQuality : null);
+
+          let videoStream = null;
+          if (targetCodec) {
+            videoStream = options.video.find(v => v.codec === targetCodec && v.id === targetQn);
+          }
+          if (!videoStream && targetCodec) {
+            videoStream = options.video.find(v => v.codec === targetCodec);
+          }
+          if (!videoStream) {
+            videoStream = options.video.find(v => v.id === targetQn);
+          }
+          if (!videoStream) {
+            videoStream = options.video[0];
           }
 
-          let audioStream = options.audio[0];
-          if (task.audioQuality) {
-            const matched = options.audio.find(a => a.id === task.audioQuality);
-            if (matched) audioStream = matched;
+          let audioStream = null;
+          if (targetAudioId) {
+            audioStream = options.audio.find(a => a.id === targetAudioId);
+          }
+          if (!audioStream) {
+            audioStream = options.audio.find(a => a.type === 'normal');
+          }
+          if (!audioStream) {
+            audioStream = options.audio[0];
           }
 
           if (!videoStream || !audioStream) {

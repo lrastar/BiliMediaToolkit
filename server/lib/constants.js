@@ -18,6 +18,19 @@ export const CODEC_MAP = {
   13: 'AV1'
 };
 
+export const CODEC_ALIAS = {
+  avc: 'AVC',
+  hevc: 'HEVC',
+  av1: 'AV1'
+};
+
+export const AUDIO_QUALITY_MAP = {
+  hires: 30251,
+  dolby: 30250,
+  '320k': 30280,
+  '128k': 30232
+};
+
 export const AUDIO_QUALITY = {
   '30280': '320kbps',
   '30232': '128kbps',
