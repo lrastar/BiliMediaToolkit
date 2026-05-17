@@ -34,19 +34,14 @@ jobs:
           cd releases
           zip -r BiliMediaToolkit.zip BiliMediaToolkit
 
-      - name: Get version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" &gt;&gt; $GITHUB_OUTPUT
-        shell: bash
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: releases/BiliMediaToolkit.zip
-          name: BiliMediaToolkit ${{ steps.get_version.outputs.VERSION }}
+          name: BiliMediaToolkit ${{ github.ref_name }}
           body: |
-            # BiliMediaToolkit ${{ steps.get_version.outputs.VERSION }}
+            # BiliMediaToolkit ${{ github.ref_name }}
             
             ## Release Notes
             - Initial release
