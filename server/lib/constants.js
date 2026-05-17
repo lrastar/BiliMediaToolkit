@@ -37,6 +37,28 @@ export const AUDIO_QUALITY = {
   '30216': '64kbps'
 };
 
+export const AUDIO_QUALITY_LABEL = {
+  30251: 'Hi-Res',
+  30250: '杜比全景声',
+  30280: '320K',
+  30232: '128K',
+  30216: '64K'
+};
+
+export const VIDEO_QUALITY_LABEL = {
+  127: '8K',
+  126: '杜比视界',
+  125: 'HDR真彩',
+  120: '4K',
+  116: '1080P60',
+  112: '1080P+',
+  80: '1080P',
+  74: '720P60',
+  64: '720P',
+  32: '480P',
+  16: '360P'
+};
+
 export const AUDIO_QUALITY_DOLBY = 30250;
 
 export const AUDIO_QUALITY_HIRES = 30251;

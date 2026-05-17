@@ -12,7 +12,7 @@ import {
 import { downloadDASH, downloadAudioOnly, taskQueue, getFileSize } from '../lib/downloader.js';
 import { getConfig } from '../lib/config.js';
 import { addRecord } from '../lib/database.js';
-import { CODEC_ALIAS, AUDIO_QUALITY_MAP } from '../lib/constants.js';
+import { CODEC_ALIAS, AUDIO_QUALITY_MAP, VIDEO_QUALITY_LABEL, AUDIO_QUALITY_LABEL } from '../lib/constants.js';
 
 const router = Router();
 
@@ -51,20 +51,42 @@ router.post('/stream-options', async (req, res) => {
 
 router.post('/download', async (req, res) => {
   try {
-    const { bvid, cid, title, videoUrl, audioUrl, quality } = req.body;
-    if (!videoUrl || !audioUrl) {
-      return res.status(400).json({ code: -1, message: 'videoUrl and audioUrl are required' });
-    }
+    const { bvid, cid, title, quality } = req.body;
 
     const config = getConfig();
     const safeTitle = (title || bvid || 'video').replace(/[\\/:*?"<>|]/g, '_');
-    const outputPath = resolve(config.downloadPath, `${safeTitle}.mp4`);
 
     const taskId = taskQueue.add({
       type: 'video',
       title: safeTitle,
       execute: async ({ abortSignal, onProgress }) => {
-        await downloadDASH(videoUrl, audioUrl, outputPath, {
+        const streamData = await getStreamUrl(bvid, cid, parseInt(quality, 10) || 127);
+        if (streamData.code !== 0) {
+          throw new Error(streamData.message || 'Failed to get stream url');
+        }
+        const options = parseStreamOptions(streamData);
+
+        const targetQn = parseInt(quality, 10) || 127;
+        const videoStream = options.video.find(v => v.id === targetQn) || options.video[0];
+        const audioStream = options.audio.find(a => a.type === 'normal') || options.audio[0];
+
+        if (!videoStream || !audioStream) {
+          throw new Error('No available stream found');
+        }
+
+        const qnLabel = VIDEO_QUALITY_LABEL[videoStream.id] || String(videoStream.id);
+        const codecLabel = videoStream.codec || '';
+        const audioLabel = AUDIO_QUALITY_LABEL[audioStream.id] || '';
+
+        const tags = [];
+        if (qnLabel) tags.push(`[${qnLabel}]`);
+        if (codecLabel) tags.push(`[${codecLabel}]`);
+        if (audioLabel) tags.push(`[${audioLabel}]`);
+
+        const finalFilename = tags.length > 0 ? `${safeTitle} ${tags.join('')}.mkv` : `${safeTitle}.mkv`;
+        const outputPath = resolve(config.downloadPath, finalFilename);
+
+        await downloadDASH(videoStream.baseUrl, audioStream.baseUrl, outputPath, {
           abortSignal,
           onProgress
         });
@@ -73,7 +95,7 @@ router.post('/download', async (req, res) => {
           url: `https://www.bilibili.com/video/${bvid}`,
           type: 'video',
           quality: quality || '',
-          format: 'mp4',
+          format: 'mkv',
           filePath: outputPath,
           fileSize: getFileSize(outputPath),
           status: 'completed'
@@ -81,7 +103,7 @@ router.post('/download', async (req, res) => {
       }
     });
 
-    res.json({ code: 0, data: { taskId, outputPath } });
+    res.json({ code: 0, data: { taskId } });
   } catch (err) {
     res.status(500).json({ code: -1, message: err.message });
   }
@@ -99,7 +121,6 @@ router.post('/download/batch', async (req, res) => {
 
     for (const task of tasks) {
       const safeTitle = (task.title || task.bvid || 'video').replace(/[\\/:*?"<>|]/g, '_');
-      const outputPath = resolve(config.downloadPath, `${safeTitle}.mp4`);
 
       const taskId = taskQueue.add({
         type: 'video',
@@ -163,6 +184,18 @@ router.post('/download/batch', async (req, res) => {
               status: 'completed'
             });
           } else {
+            const qnLabel = VIDEO_QUALITY_LABEL[videoStream.id] || String(videoStream.id);
+            const codecLabel = videoStream.codec || '';
+            const audioLabel = AUDIO_QUALITY_LABEL[audioStream.id] || '';
+
+            const tags = [];
+            if (qnLabel) tags.push(`[${qnLabel}]`);
+            if (codecLabel) tags.push(`[${codecLabel}]`);
+            if (audioLabel) tags.push(`[${audioLabel}]`);
+
+            const finalFilename = tags.length > 0 ? `${safeTitle} ${tags.join('')}.mkv` : `${safeTitle}.mkv`;
+            const outputPath = resolve(config.downloadPath, finalFilename);
+
             await downloadDASH(videoStream.baseUrl, audioStream.baseUrl, outputPath, {
               abortSignal,
               onProgress
@@ -172,7 +205,7 @@ router.post('/download/batch', async (req, res) => {
               url: `https://www.bilibili.com/video/${task.bvid}`,
               type: 'video',
               quality: task.qn ? String(task.qn) : '',
-              format: 'mp4',
+              format: 'mkv',
               filePath: outputPath,
               fileSize: getFileSize(outputPath),
               status: 'completed'
