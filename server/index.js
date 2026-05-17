@@ -67,9 +67,16 @@ const corsOptions = process.env.NODE_ENV === 'production'
 app.use(cors(corsOptions));
 app.use(express.json());
 
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(join(__dirname, '..', 'client', 'dist')));
-}
+const clientDistPath = join(__dirname, '..', 'client', 'dist');
+app.use(express.static(clientDistPath));
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/ws')) {
+    next();
+  } else {
+    res.sendFile(join(clientDistPath, 'index.html'));
+  }
+});
 
 app.use('/api/auth', authRouter);
 app.use('/api/video', videoRouter);

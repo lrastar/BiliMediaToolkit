@@ -29,11 +29,21 @@
 
 ## 快速开始
 
-### 环境要求
+### 📦 使用预编译包（推荐）
 
-- Node.js >= 18
+1. 前往 [Releases](https://github.com/lrastar/BiliMediaToolkit/releases) 下载最新版本
+2. 解压 `BiliMediaToolkit.zip`
+3. Windows 用户：双击 `start.bat`
+4. Linux/macOS 用户：执行 `bash start.sh`
+5. 在浏览器打开 http://localhost:3000 即可使用
 
-### 安装步骤
+### 🔧 从源码构建
+
+#### 环境要求
+
+- Node.js &gt;= 18
+
+#### 安装步骤
 
 ```bash
 git clone https://github.com/lrastar/BiliMediaToolkit.git
@@ -42,11 +52,20 @@ npm run install:all
 npm run dev
 ```
 
-### 访问地址
+#### 访问地址
 
-前端：http://localhost:5173
+开发模式前端：http://localhost:5173
 
 后端 API：http://localhost:3000
+
+#### 打包发布
+
+```bash
+npm run build
+npm run package
+```
+
+打包产物在 `releases/BiliMediaToolkit` 目录
 
 ## 项目结构
 
