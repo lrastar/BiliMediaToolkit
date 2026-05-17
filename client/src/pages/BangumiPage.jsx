@@ -18,19 +18,22 @@ const AUDIO_FORMAT_OPTIONS = [
   { value: 'm4a', label: 'M4A' }
 ]
 
-const FALLBACK_QUALITIES = [
-  { value: '127', label: '8K' }, { value: '120', label: '4K' },
-  { value: '116', label: '1080P60' }, { value: '80', label: '1080P' },
-  { value: '64', label: '720P' }, { value: '32', label: '480P' }
+const REQUEST_QUALITIES = [
+  { value: '127', label: '8K（请求）' }, { value: '126', label: '杜比视界（请求）' },
+  { value: '125', label: 'HDR真彩（请求）' }, { value: '120', label: '4K（请求）' },
+  { value: '116', label: '1080P60（请求）' }, { value: '112', label: '1080P+（请求）' },
+  { value: '80', label: '1080P（请求）' }, { value: '74', label: '720P60（请求）' },
+  { value: '64', label: '720P（请求）' }, { value: '32', label: '480P（请求）' },
+  { value: '16', label: '360P（请求）' }
 ]
 
-const FALLBACK_CODECS = [
-  { value: 'av1', label: 'AV1' }, { value: 'hevc', label: 'HEVC' }, { value: 'avc', label: 'AVC' }
+const REQUEST_CODECS = [
+  { value: 'av1', label: 'AV1（请求）' }, { value: 'hevc', label: 'HEVC（请求）' }, { value: 'avc', label: 'AVC（请求）' }
 ]
 
-const FALLBACK_AUDIO = [
-  { value: '30251', label: 'Hi-Res 无损' }, { value: '30250', label: '杜比全景声' },
-  { value: '30280', label: '192K' }, { value: '30232', label: '128K' }
+const REQUEST_AUDIO = [
+  { value: '30251', label: 'Hi-Res 无损（请求）' }, { value: '30250', label: '杜比全景声（请求）' },
+  { value: '30280', label: '192K（请求）' }, { value: '30232', label: '128K（请求）' }
 ]
 
 const HIGH_QUALITY_THRESHOLD = 80
@@ -75,7 +78,7 @@ export default function BangumiPage() {
       .map(qn => ({ value: String(qn), label: QN_LABELS[qn] || `${qn}P` }))
   }, [streamOptions])
 
-  const displayQualities = availableQualities.length > 0 ? availableQualities : FALLBACK_QUALITIES
+  const displayQualities = availableQualities.length > 0 ? availableQualities : REQUEST_QUALITIES
 
   const availableCodecs = useMemo(() => {
     if (!streamOptions?.video) return []
@@ -84,7 +87,7 @@ export default function BangumiPage() {
       .map(c => ({ value: c.toLowerCase(), label: c }))
   }, [streamOptions, quality])
 
-  const displayCodecs = availableCodecs.length > 0 ? availableCodecs : FALLBACK_CODECS
+  const displayCodecs = availableCodecs.length > 0 ? availableCodecs : REQUEST_CODECS
 
   const availableAudio = useMemo(() => {
     if (!streamOptions?.audio) return []
@@ -94,7 +97,9 @@ export default function BangumiPage() {
       .map(id => ({ value: String(id), label: AUDIO_ID_LABELS[id] || `${id}` }))
   }, [streamOptions])
 
-  const displayAudio = availableAudio.length > 0 ? availableAudio : FALLBACK_AUDIO
+  const displayAudio = availableAudio.length > 0 ? availableAudio : REQUEST_AUDIO
+
+  const isStreamAvailable = streamOptions?.video?.length > 0
 
   const inspectBangumi = async () => {
     if (!url.trim()) return
@@ -153,10 +158,12 @@ export default function BangumiPage() {
           setAudioQuality(String(streamData.data.audio[0].id))
         }
       } else {
-        setStreamError(streamData.message || '获取流信息失败，将使用默认选项（下载时会自动匹配可用画质）')
+        setStreamOptions(null)
+        setStreamError(streamData.message || '无法获取流信息，以下为请求画质选项，实际下载将自动降级到可用最高画质')
       }
     } catch (err) {
-      setStreamError(err.message || '获取流信息失败，将使用默认选项（下载时会自动匹配可用画质）')
+      setStreamOptions(null)
+      setStreamError(err.message || '无法获取流信息，以下为请求画质选项，实际下载将自动降级到可用最高画质')
     }
   }
 
@@ -299,9 +306,17 @@ export default function BangumiPage() {
               </div>
             )}
 
+            {!isStreamAvailable && (
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400">
+                以下为请求画质选项，实际下载将自动降级到该番剧可用的最高画质
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs text-gray-400">视频画质{!streamOptions && ' (默认)'}</label>
+                <label className="text-xs text-gray-400">
+                  {isStreamAvailable ? '视频画质' : '请求画质（自动降级）'}
+                </label>
                 <select
                   value={quality}
                   onChange={e => setQuality(e.target.value)}
@@ -313,7 +328,9 @@ export default function BangumiPage() {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs text-gray-400">视频编码{!streamOptions && ' (默认)'}</label>
+                <label className="text-xs text-gray-400">
+                  {isStreamAvailable ? '视频编码' : '请求编码（自动降级）'}
+                </label>
                 <select
                   value={codec}
                   onChange={e => setCodec(e.target.value)}
@@ -325,7 +342,9 @@ export default function BangumiPage() {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs text-gray-400">音频质量{!streamOptions && ' (默认)'}</label>
+                <label className="text-xs text-gray-400">
+                  {isStreamAvailable ? '音频质量' : '请求音频（自动降级）'}
+                </label>
                 <select
                   value={audioQuality}
                   onChange={e => setAudioQuality(e.target.value)}
@@ -362,12 +381,6 @@ export default function BangumiPage() {
                 </div>
               )}
             </div>
-
-            {!streamOptions && !streamError && (
-              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400">
-                流信息使用默认选项，下载时会自动匹配该番剧实际可用的最高画质
-              </div>
-            )}
 
             {parseInt(quality) > HIGH_QUALITY_THRESHOLD && !authStatus?.isLogin && (
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-400">
