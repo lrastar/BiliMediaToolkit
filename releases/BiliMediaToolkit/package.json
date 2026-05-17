@@ -1,0 +1,30 @@
+{
+  "name": "BiliMediaToolkit",
+  "version": "1.0.0",
+  "description": "Bilibili 视频下载工具 - 支持最高画质 AV1/杜比视界/HDR 下载",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "cd server && node --watch index.js",
+    "client:dev": "cd client && npm run dev",
+    "start": "cd server && node index.js",
+    "build": "cd client && npm run build",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "package": "node scripts/package-release.js",
+    "start:win": "start.bat",
+    "start:unix": "bash start.sh"
+  },
+  "keywords": [
+    "bilibili",
+    "download",
+    "video",
+    "ffmpeg",
+    "av1",
+    "dolby"
+  ],
+  "author": "lrastar",
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
