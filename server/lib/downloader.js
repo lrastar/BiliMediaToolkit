@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { mergeDASH, convertAudio, ensureFfmpeg } from './ffmpeg.js';
-import { getCookie } from './config.js';
+import { getCookie, getConfig } from './config.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -301,17 +301,24 @@ export class TaskQueue extends EventEmitter {
         abortSignal: pending.abortController.signal,
         onProgress: (progress) => {
           pending.progress = progress;
+          const pct = progress.percent || 0;
+          const dl = (progress.downloaded / 1024 / 1024).toFixed(1);
+          const tot = (progress.total / 1024 / 1024).toFixed(1);
+          const spd = (progress.speed / 1024 / 1024).toFixed(1);
+          process.stdout.write(`\r[下载] ${pending.title} | ${pct}% | ${dl}/${tot} MB | ${spd} MB/s`);
           this.emit('task:updated', this._serialize(pending));
         }
       });
 
       pending.status = 'completed';
       pending.progress.percent = 100;
+      console.log(`\n[完成] ${pending.title}`);
       this.emit('task:updated', this._serialize(pending));
     } catch (err) {
       if (pending.status !== 'paused') {
         pending.status = 'failed';
         pending.error = err.message;
+        console.log(`\n[失败] ${pending.title}: ${err.message}`);
         this.emit('task:updated', this._serialize(pending));
       }
     } finally {
@@ -323,4 +330,5 @@ export class TaskQueue extends EventEmitter {
   }
 }
 
-export const taskQueue = new TaskQueue(3);
+const initialConfig = getConfig();
+export const taskQueue = new TaskQueue(initialConfig.concurrency || 3);

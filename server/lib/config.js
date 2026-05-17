@@ -55,9 +55,11 @@ function decrypt(text) {
   }
 }
 
+const PROJECT_ROOT = resolve(__dirname, '../..');
+
 const DEFAULT_CONFIG = {
   cookie: '',
-  downloadPath: './downloads',
+  downloadPath: resolve(PROJECT_ROOT, 'downloads'),
   concurrency: 3,
   audioFormat: 'mp3'
 };
@@ -68,6 +70,11 @@ function ensureConfig() {
   }
 }
 
+function resolveDownloadPath(p) {
+  if (!p) return DEFAULT_CONFIG.downloadPath;
+  return resolve(p) === p ? p : resolve(PROJECT_ROOT, p);
+}
+
 export function getConfig() {
   ensureConfig();
   const raw = readFileSync(CONFIG_PATH, 'utf-8');
@@ -75,6 +82,7 @@ export function getConfig() {
   return {
     ...DEFAULT_CONFIG,
     ...parsed,
+    downloadPath: resolveDownloadPath(parsed.downloadPath),
     cookie: decrypt(parsed.cookie || '')
   };
 }

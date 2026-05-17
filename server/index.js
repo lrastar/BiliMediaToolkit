@@ -78,6 +78,37 @@ app.use('/api/live', liveRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/history', historyRouter);
 
+app.get('/api/proxy/image', async (req, res) => {
+  const imageUrl = req.query.url;
+  if (!imageUrl) {
+    return res.status(400).json({ code: -1, message: 'url is required' });
+  }
+  try {
+    const allowedHosts = ['hdslb.com', 'bilibili.com', 'biligcfn.com', 'akamaized.net', 'bdimg.com'];
+    const urlObj = new URL(imageUrl);
+    const isAllowed = allowedHosts.some(h => urlObj.hostname.endsWith(h));
+    if (!isAllowed) {
+      return res.status(403).json({ code: -1, message: 'Host not allowed' });
+    }
+    const imgRes = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://www.bilibili.com'
+      }
+    });
+    if (!imgRes.ok) {
+      return res.status(imgRes.status).json({ code: -1, message: `Upstream ${imgRes.status}` });
+    }
+    const contentType = imgRes.headers.get('content-type') || 'image/png';
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=86400');
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ code: -1, message: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {

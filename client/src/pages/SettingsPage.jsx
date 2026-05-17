@@ -161,7 +161,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               {authStatus.userInfo?.face && (
-                <img src={authStatus.userInfo.face} alt="头像" className="w-12 h-12 rounded-full" />
+                <img src={`/api/proxy/image?url=${encodeURIComponent(authStatus.userInfo.face)}`} alt="头像" className="w-12 h-12 rounded-full" />
               )}
               <div>
                 <div className="text-white font-medium">{authStatus.userInfo?.uname || '用户'}</div>

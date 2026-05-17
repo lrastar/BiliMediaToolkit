@@ -11,6 +11,7 @@ export default defineConfig({
         target: 'ws://localhost:3000',
         ws: true,
         configure: (proxy) => {
+          proxy.removeAllListeners('error')
           proxy.on('error', () => {})
         }
       }

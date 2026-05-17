@@ -190,7 +190,7 @@ export default function HomePage() {
           <div className="rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl p-8 shadow-2xl space-y-5">
             <div className="flex gap-5">
               {videoInfo.pic && (
-                <img src={videoInfo.pic} alt="" className="w-32 h-20 rounded-xl object-cover shrink-0" />
+                <img src={`/api/proxy/image?url=${encodeURIComponent(videoInfo.pic)}`} alt="" className="w-32 h-20 rounded-xl object-cover shrink-0" />
               )}
               <div className="min-w-0 space-y-1.5">
                 <h3 className="font-semibold text-white line-clamp-2">{videoInfo.title}</h3>
@@ -357,11 +357,11 @@ export default function HomePage() {
                         {task.status === 'paused' && '已暂停'}
                         {task.status === 'pending' && '等待中'}
                       </span>
-                      {task.speed && task.status === 'downloading' && (
-                        <span className="text-gray-500">{formatSpeed(task.speed)}</span>
+                      {task.progress?.speed > 0 && task.status === 'downloading' && (
+                        <span className="text-gray-500">{formatSpeed(task.progress.speed)}</span>
                       )}
-                      {task.size && (
-                        <span className="text-gray-500">{formatSize(task.size)}</span>
+                      {task.progress?.total > 0 && (
+                        <span className="text-gray-500">{formatSize(task.progress.downloaded)}/{formatSize(task.progress.total)}</span>
                       )}
                     </div>
                   </div>
@@ -371,7 +371,7 @@ export default function HomePage() {
                   <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full transition-all duration-300"
-                      style={{ width: `${task.progress || 0}%` }}
+                      style={{ width: `${task.progress?.percent || 0}%` }}
                     />
                   </div>
                 )}
