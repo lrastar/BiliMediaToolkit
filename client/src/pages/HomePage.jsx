@@ -1,32 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import useDownloadStore from '../stores/useDownloadStore'
 
-const QUALITY_OPTIONS = [
-  { value: '127', label: '8K' },
-  { value: '126', label: '杜比视界' },
-  { value: '125', label: 'HDR' },
-  { value: '120', label: '4K' },
-  { value: '116', label: '1080P60' },
-  { value: '112', label: '1080P+' },
-  { value: '80', label: '1080P' },
-  { value: '74', label: '720P60' },
-  { value: '64', label: '720P' },
-  { value: '48', label: '480P' },
-  { value: '16', label: '360P' }
-]
+const QN_LABELS = {
+  127: '8K', 126: '杜比视界', 125: 'HDR真彩', 120: '4K',
+  116: '1080P60', 112: '1080P+', 80: '1080P', 74: '720P60',
+  64: '720P', 32: '480P', 16: '360P'
+}
 
-const CODEC_OPTIONS = [
-  { value: 'av1', label: 'AV1' },
-  { value: 'hevc', label: 'HEVC' },
-  { value: 'avc', label: 'AVC' }
-]
-
-const AUDIO_OPTIONS = [
-  { value: 'hires', label: 'Hi-Res 无损' },
-  { value: 'dolby', label: '杜比全景声' },
-  { value: '192k', label: '192kbps' },
-  { value: '128k', label: '128kbps' }
-]
+const AUDIO_ID_LABELS = {
+  30251: 'Hi-Res 无损', 30250: '杜比全景声',
+  30280: '192kbps', 30232: '128kbps', 30216: '64kbps'
+}
 
 const AUDIO_FORMAT_OPTIONS = [
   { value: 'mp3', label: 'MP3' },
@@ -40,10 +24,11 @@ export default function HomePage() {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [videoInfo, setVideoInfo] = useState(null)
+  const [streamOptions, setStreamOptions] = useState(null)
   const [selectedPages, setSelectedPages] = useState([])
-  const [quality, setQuality] = useState('127')
-  const [codec, setCodec] = useState('av1')
-  const [audioQuality, setAudioQuality] = useState('hires')
+  const [quality, setQuality] = useState('')
+  const [codec, setCodec] = useState('')
+  const [audioQuality, setAudioQuality] = useState('')
   const [downloadMode, setDownloadMode] = useState('video')
   const [audioFormat, setAudioFormat] = useState('mp3')
   const [authStatus, setAuthStatus] = useState(null)
@@ -66,10 +51,34 @@ export default function HomePage() {
       .catch(() => {})
   }, [])
 
+  const availableQualities = useMemo(() => {
+    if (!streamOptions?.video) return []
+    const qnSet = new Set(streamOptions.video.map(v => v.id))
+    return [...qnSet]
+      .sort((a, b) => b - a)
+      .map(qn => ({ value: String(qn), label: QN_LABELS[qn] || `${qn}P` }))
+  }, [streamOptions])
+
+  const availableCodecs = useMemo(() => {
+    if (!streamOptions?.video) return []
+    const codecSet = new Set(streamOptions.video.filter(v => v.id === parseInt(quality)).map(v => v.codec))
+    return [...codecSet]
+      .map(c => ({ value: c.toLowerCase(), label: c }))
+  }, [streamOptions, quality])
+
+  const availableAudio = useMemo(() => {
+    if (!streamOptions?.audio) return []
+    const audioSet = new Set(streamOptions.audio.map(a => a.id))
+    return [...audioSet]
+      .sort((a, b) => b - a)
+      .map(id => ({ value: String(id), label: AUDIO_ID_LABELS[id] || `${id}` }))
+  }, [streamOptions])
+
   const inspectVideo = async () => {
     if (!url.trim()) return
     setLoading(true)
     setVideoInfo(null)
+    setStreamOptions(null)
     setSelectedPages([])
     try {
       const res = await fetch('/api/video/inspect', {
@@ -81,6 +90,21 @@ export default function HomePage() {
       if (data.code === 0 && data.data) {
         setVideoInfo(data.data)
         setSelectedPages([data.data.pages?.[0]?.cid].filter(Boolean))
+
+        const firstCid = data.data.pages?.[0]?.cid
+        if (firstCid) {
+          try {
+            const streamRes = await fetch('/api/video/stream-options', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bvid: data.data.bvid, cid: firstCid, qn: 127 })
+            })
+            const streamData = await streamRes.json()
+            if (streamData.code === 0 && streamData.data) {
+              setStreamOptions(streamData.data)
+            }
+          } catch {}
+        }
       } else {
         setVideoInfo(null)
       }
@@ -90,6 +114,25 @@ export default function HomePage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (availableQualities.length > 0 && !quality) {
+      setQuality(availableQualities[0].value)
+    }
+  }, [availableQualities, quality])
+
+  useEffect(() => {
+    if (availableCodecs.length > 0) {
+      const av1 = availableCodecs.find(c => c.value === 'av1')
+      setCodec(av1 ? av1.value : availableCodecs[0].value)
+    }
+  }, [availableCodecs])
+
+  useEffect(() => {
+    if (availableAudio.length > 0 && !audioQuality) {
+      setAudioQuality(availableAudio[0].value)
+    }
+  }, [availableAudio, audioQuality])
 
   const togglePage = (cid) => {
     setSelectedPages(prev =>
@@ -112,7 +155,7 @@ export default function HomePage() {
         title: p.part,
         qn: quality,
         codec,
-        audioQuality,
+        audioQuality: isNaN(parseInt(audioQuality)) ? audioQuality : parseInt(audioQuality),
         mode: downloadMode,
         audioFormat
       }))
@@ -227,9 +270,13 @@ export default function HomePage() {
                   onChange={e => setQuality(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-cyan-500 transition"
                 >
-                  {QUALITY_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
-                  ))}
+                  {availableQualities.length > 0 ? (
+                    availableQualities.map(o => (
+                      <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
+                    ))
+                  ) : (
+                    <option className="bg-gray-900">解析后显示</option>
+                  )}
                 </select>
               </div>
               <div className="space-y-2">
@@ -239,9 +286,13 @@ export default function HomePage() {
                   onChange={e => setCodec(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-cyan-500 transition"
                 >
-                  {CODEC_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
-                  ))}
+                  {availableCodecs.length > 0 ? (
+                    availableCodecs.map(o => (
+                      <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
+                    ))
+                  ) : (
+                    <option className="bg-gray-900">解析后显示</option>
+                  )}
                 </select>
               </div>
               <div className="space-y-2">
@@ -251,9 +302,13 @@ export default function HomePage() {
                   onChange={e => setAudioQuality(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-cyan-500 transition"
                 >
-                  {AUDIO_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
-                  ))}
+                  {availableAudio.length > 0 ? (
+                    availableAudio.map(o => (
+                      <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
+                    ))
+                  ) : (
+                    <option className="bg-gray-900">解析后显示</option>
+                  )}
                 </select>
               </div>
               <div className="space-y-2">

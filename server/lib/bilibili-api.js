@@ -163,10 +163,13 @@ export async function getStreamUrl(bvid, cid, qn = 127, fnval = FNVAL_DASH_ALL) 
 export function parseStreamOptions(playData) {
   const dash = playData?.data?.dash;
   if (!dash) {
-    return { video: [], audio: [] };
+    return { video: [], audio: [], acceptQuality: [] };
   }
 
+  const acceptQuality = playData?.data?.accept_quality || [];
+
   const video = (dash.video || [])
+    .filter(v => acceptQuality.length === 0 || acceptQuality.includes(v.id))
     .map(v => ({
       id: v.id,
       baseUrl: v.baseUrl,
@@ -219,7 +222,7 @@ export function parseStreamOptions(playData) {
     });
   });
 
-  return { video, audio };
+  return { video, audio, acceptQuality };
 }
 
 export async function getBangumiInfo(params) {
