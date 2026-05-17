@@ -18,6 +18,21 @@ const AUDIO_FORMAT_OPTIONS = [
   { value: 'm4a', label: 'M4A' }
 ]
 
+const FALLBACK_QUALITIES = [
+  { value: '127', label: '8K' }, { value: '120', label: '4K' },
+  { value: '116', label: '1080P60' }, { value: '80', label: '1080P' },
+  { value: '64', label: '720P' }, { value: '32', label: '480P' }
+]
+
+const FALLBACK_CODECS = [
+  { value: 'av1', label: 'AV1' }, { value: 'hevc', label: 'HEVC' }, { value: 'avc', label: 'AVC' }
+]
+
+const FALLBACK_AUDIO = [
+  { value: '30251', label: 'Hi-Res 无损' }, { value: '30250', label: '杜比全景声' },
+  { value: '30280', label: '192K' }, { value: '30232', label: '128K' }
+]
+
 const HIGH_QUALITY_THRESHOLD = 80
 
 export default function BangumiPage() {
@@ -25,10 +40,11 @@ export default function BangumiPage() {
   const [loading, setLoading] = useState(false)
   const [bangumiInfo, setBangumiInfo] = useState(null)
   const [streamOptions, setStreamOptions] = useState(null)
+  const [streamError, setStreamError] = useState(null)
   const [selectedEpisodes, setSelectedEpisodes] = useState([])
-  const [quality, setQuality] = useState('')
-  const [codec, setCodec] = useState('')
-  const [audioQuality, setAudioQuality] = useState('')
+  const [quality, setQuality] = useState('80')
+  const [codec, setCodec] = useState('av1')
+  const [audioQuality, setAudioQuality] = useState('30280')
   const [downloadMode, setDownloadMode] = useState('video')
   const [audioFormat, setAudioFormat] = useState('mp3')
   const [authStatus, setAuthStatus] = useState(null)
@@ -59,12 +75,16 @@ export default function BangumiPage() {
       .map(qn => ({ value: String(qn), label: QN_LABELS[qn] || `${qn}P` }))
   }, [streamOptions])
 
+  const displayQualities = availableQualities.length > 0 ? availableQualities : FALLBACK_QUALITIES
+
   const availableCodecs = useMemo(() => {
     if (!streamOptions?.video) return []
     const codecSet = new Set(streamOptions.video.filter(v => v.id === parseInt(quality)).map(v => v.codec))
     return [...codecSet]
       .map(c => ({ value: c.toLowerCase(), label: c }))
   }, [streamOptions, quality])
+
+  const displayCodecs = availableCodecs.length > 0 ? availableCodecs : FALLBACK_CODECS
 
   const availableAudio = useMemo(() => {
     if (!streamOptions?.audio) return []
@@ -74,11 +94,14 @@ export default function BangumiPage() {
       .map(id => ({ value: String(id), label: AUDIO_ID_LABELS[id] || `${id}` }))
   }, [streamOptions])
 
+  const displayAudio = availableAudio.length > 0 ? availableAudio : FALLBACK_AUDIO
+
   const inspectBangumi = async () => {
     if (!url.trim()) return
     setLoading(true)
     setBangumiInfo(null)
     setStreamOptions(null)
+    setStreamError(null)
     setSelectedEpisodes([])
     try {
       const res = await fetch('/api/video/bangumi', {
@@ -92,27 +115,21 @@ export default function BangumiPage() {
         const firstEp = data.data.episodes?.[0]
         if (firstEp) {
           setSelectedEpisodes([firstEp.ep_id])
-          try {
-            const streamRes = await fetch('/api/video/bangumi/stream', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ep_id: firstEp.ep_id, qn: 127 })
-            })
-            const streamData = await streamRes.json()
-            if (streamData.code === 0 && streamData.data) {
-              setStreamOptions(streamData.data)
-            }
-          } catch {}
+          await fetchStreamOptions(firstEp.ep_id)
         }
+      } else {
+        setStreamError(data.message || '解析番剧信息失败')
       }
-    } catch {
+    } catch (err) {
       setBangumiInfo(null)
+      setStreamError(err.message || '网络请求失败')
     } finally {
       setLoading(false)
     }
   }
 
   const fetchStreamOptions = async (epId) => {
+    setStreamError(null)
     try {
       const streamRes = await fetch('/api/video/bangumi/stream', {
         method: 'POST',
@@ -122,8 +139,25 @@ export default function BangumiPage() {
       const streamData = await streamRes.json()
       if (streamData.code === 0 && streamData.data) {
         setStreamOptions(streamData.data)
+        if (streamData.data.video?.length > 0) {
+          const highestQn = String(streamData.data.video[0].id)
+          setQuality(highestQn)
+          const codecSet = new Set(streamData.data.video.filter(v => v.id === parseInt(highestQn)).map(v => v.codec))
+          const codecs = [...codecSet]
+          if (codecs.length > 0) {
+            const av1 = codecs.find(c => c.toLowerCase() === 'av1')
+            setCodec(av1 ? 'av1' : codecs[0].toLowerCase())
+          }
+        }
+        if (streamData.data.audio?.length > 0) {
+          setAudioQuality(String(streamData.data.audio[0].id))
+        }
+      } else {
+        setStreamError(streamData.message || '获取流信息失败，将使用默认选项（下载时会自动匹配可用画质）')
       }
-    } catch {}
+    } catch (err) {
+      setStreamError(err.message || '获取流信息失败，将使用默认选项（下载时会自动匹配可用画质）')
+    }
   }
 
   const toggleEpisode = (epId) => {
@@ -136,25 +170,6 @@ export default function BangumiPage() {
       fetchStreamOptions(epId)
     }
   }
-
-  useEffect(() => {
-    if (availableQualities.length > 0 && !quality) {
-      setQuality(availableQualities[0].value)
-    }
-  }, [availableQualities, quality])
-
-  useEffect(() => {
-    if (availableCodecs.length > 0) {
-      const av1 = availableCodecs.find(c => c.value === 'av1')
-      setCodec(av1 ? av1.value : availableCodecs[0].value)
-    }
-  }, [availableCodecs])
-
-  useEffect(() => {
-    if (availableAudio.length > 0 && !audioQuality) {
-      setAudioQuality(availableAudio[0].value)
-    }
-  }, [availableAudio, audioQuality])
 
   const startDownload = async (selectedEpIds) => {
     if (!bangumiInfo || selectedEpIds.length === 0) return
@@ -275,53 +290,50 @@ export default function BangumiPage() {
               </div>
             )}
 
+            {streamError && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-400 flex items-start gap-2">
+                <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{streamError}</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs text-gray-400">视频画质</label>
+                <label className="text-xs text-gray-400">视频画质{!streamOptions && ' (默认)'}</label>
                 <select
                   value={quality}
                   onChange={e => setQuality(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-cyan-500 transition"
                 >
-                  {availableQualities.length > 0 ? (
-                    availableQualities.map(o => (
-                      <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
-                    ))
-                  ) : (
-                    <option className="bg-gray-900">解析中...</option>
-                  )}
+                  {displayQualities.map(o => (
+                    <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs text-gray-400">视频编码</label>
+                <label className="text-xs text-gray-400">视频编码{!streamOptions && ' (默认)'}</label>
                 <select
                   value={codec}
                   onChange={e => setCodec(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-cyan-500 transition"
                 >
-                  {availableCodecs.length > 0 ? (
-                    availableCodecs.map(o => (
-                      <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
-                    ))
-                  ) : (
-                    <option className="bg-gray-900">解析中...</option>
-                  )}
+                  {displayCodecs.map(o => (
+                    <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs text-gray-400">音频质量</label>
+                <label className="text-xs text-gray-400">音频质量{!streamOptions && ' (默认)'}</label>
                 <select
                   value={audioQuality}
                   onChange={e => setAudioQuality(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-cyan-500 transition"
                 >
-                  {availableAudio.length > 0 ? (
-                    availableAudio.map(o => (
-                      <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
-                    ))
-                  ) : (
-                    <option className="bg-gray-900">解析中...</option>
-                  )}
+                  {displayAudio.map(o => (
+                    <option key={o.value} value={o.value} className="bg-gray-900">{o.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-2">
@@ -350,6 +362,12 @@ export default function BangumiPage() {
                 </div>
               )}
             </div>
+
+            {!streamOptions && !streamError && (
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-sm text-blue-400">
+                流信息使用默认选项，下载时会自动匹配该番剧实际可用的最高画质
+              </div>
+            )}
 
             {parseInt(quality) > HIGH_QUALITY_THRESHOLD && !authStatus?.isLogin && (
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm text-amber-400">
