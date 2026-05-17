@@ -1,0 +1,9 @@
+node_modules
+downloads/
+**/downloads/
+config.json
+*.db
+*.tmp
+bin/
+data/
+client/dist/
