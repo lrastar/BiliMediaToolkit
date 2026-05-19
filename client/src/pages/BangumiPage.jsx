@@ -116,7 +116,7 @@ export default function BangumiPage() {
         const firstEp = data.data.episodes?.[0]
         if (firstEp) {
           setSelectedEpisodes([firstEp.ep_id])
-          await fetchStreamOptions(firstEp.ep_id)
+          await fetchStreamOptions(firstEp.ep_id, firstEp)
         }
       } else {
         setStreamError(data.message || '解析番剧信息失败')
@@ -129,9 +129,9 @@ export default function BangumiPage() {
     }
   }
 
-  const fetchStreamOptions = async (epId) => {
+  const fetchStreamOptions = async (epId, episode) => {
     setStreamError(null)
-    const ep = bangumiInfo?.episodes?.find(e => e.ep_id === epId)
+    const ep = episode || bangumiInfo?.episodes?.find(e => e.ep_id === epId)
     const body = ep?.bvid && ep?.cid
       ? { bvid: ep.bvid, cid: ep.cid, qn: 127 }
       : { ep_id: epId, qn: 127 }
