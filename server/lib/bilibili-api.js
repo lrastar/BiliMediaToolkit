@@ -161,12 +161,17 @@ export async function getStreamUrl(bvid, cid, qn = 127, fnval = FNVAL_DASH_ALL) 
 }
 
 export function parseStreamOptions(playData) {
-  const dash = playData?.data?.dash;
+  const payload = playData?.data || playData?.result;
+  const dash = payload?.dash;
   if (!dash) {
-    return { video: [], audio: [], acceptQuality: [] };
+    const acceptQuality = payload?.accept_quality || [];
+    const errorCode = payload?.error_code;
+    const isPreview = payload?.is_preview;
+    const hasPaid = payload?.has_paid;
+    return { video: [], audio: [], acceptQuality, errorCode, isPreview, hasPaid };
   }
 
-  const acceptQuality = playData?.data?.accept_quality || [];
+  const acceptQuality = payload?.accept_quality || [];
 
   const video = (dash.video || [])
     .filter(v => acceptQuality.length === 0 || acceptQuality.includes(v.id))

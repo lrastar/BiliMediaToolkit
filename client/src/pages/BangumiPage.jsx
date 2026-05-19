@@ -59,14 +59,21 @@ export default function BangumiPage() {
   const hasStreamData = streamOptions?.video?.length > 0
 
   const availableQualities = useMemo(() => {
-    if (!hasStreamData) return []
-    const qnSet = new Set(streamOptions.video.map(v => v.id))
-    return [...qnSet]
-      .sort((a, b) => b - a)
-      .map(qn => ({ value: String(qn), label: QN_LABELS[qn] || `${qn}P` }))
+    if (hasStreamData) {
+      const qnSet = new Set(streamOptions.video.map(v => v.id))
+      return [...qnSet]
+        .sort((a, b) => b - a)
+        .map(qn => ({ value: String(qn), label: QN_LABELS[qn] || `${qn}P` }))
+    }
+    if (streamOptions?.acceptQuality?.length > 0) {
+      return streamOptions.acceptQuality
+        .sort((a, b) => b - a)
+        .map(qn => ({ value: String(qn), label: QN_LABELS[qn] || `${qn}P` }))
+    }
+    return []
   }, [streamOptions, hasStreamData])
 
-  const displayQualities = hasStreamData ? availableQualities : [AUTO_QUALITY]
+  const displayQualities = availableQualities.length > 0 ? availableQualities : [AUTO_QUALITY]
 
   const availableCodecs = useMemo(() => {
     if (!hasStreamData) return []
@@ -131,18 +138,34 @@ export default function BangumiPage() {
         body: JSON.stringify({ ep_id: epId, qn: 127 })
       })
       const streamData = await streamRes.json()
-      if (streamData.code === 0 && streamData.data?.video?.length > 0) {
+      if (streamData.code === 0 && streamData.data) {
         setStreamOptions(streamData.data)
-        const highestQn = String(streamData.data.video[0].id)
-        setQuality(highestQn)
-        const codecSet = new Set(streamData.data.video.filter(v => v.id === parseInt(highestQn)).map(v => v.codec))
-        const codecs = [...codecSet]
-        if (codecs.length > 0) {
-          const av1 = codecs.find(c => c.toLowerCase() === 'av1')
-          setCodec(av1 ? 'av1' : codecs[0].toLowerCase())
-        }
-        if (streamData.data.audio?.length > 0) {
-          setAudioQuality(String(streamData.data.audio[0].id))
+        if (streamData.data.video?.length > 0) {
+          const highestQn = String(streamData.data.video[0].id)
+          setQuality(highestQn)
+          const codecSet = new Set(streamData.data.video.filter(v => v.id === parseInt(highestQn)).map(v => v.codec))
+          const codecs = [...codecSet]
+          if (codecs.length > 0) {
+            const av1 = codecs.find(c => c.toLowerCase() === 'av1')
+            setCodec(av1 ? 'av1' : codecs[0].toLowerCase())
+          }
+          if (streamData.data.audio?.length > 0) {
+            setAudioQuality(String(streamData.data.audio[0].id))
+          }
+        } else if (streamData.data.acceptQuality?.length > 0) {
+          setQuality(String(streamData.data.acceptQuality[0]))
+          setCodec('auto')
+          setAudioQuality('0')
+          if (streamData.data.errorCode === -10403) {
+            setStreamError('该番剧需要大会员权限，当前仅能获取预览画质。请登录大会员账号后重试')
+          } else if (streamData.data.isPreview === 1) {
+            setStreamError('当前仅能获取预览画质，请登录后获取完整画质')
+          }
+        } else {
+          setQuality('0')
+          setCodec('auto')
+          setAudioQuality('0')
+          setStreamError('无法获取流信息，将自动匹配最高可用画质')
         }
       } else {
         setStreamOptions(null)
@@ -151,9 +174,9 @@ export default function BangumiPage() {
         setAudioQuality('0')
         const msg = streamData.message || ''
         if (msg.includes('大会员') || msg.includes('vip') || msg.includes('VIP')) {
-          setStreamError('获取流信息失败：该番剧需要大会员，请登录大会员账号后重试')
+          setStreamError('该番剧需要大会员，请登录大会员账号后重试')
         } else if (streamData.code === -10403) {
-          setStreamError('获取流信息失败：权限不足，请确认已登录大会员账号')
+          setStreamError('权限不足，请确认已登录大会员账号')
         } else {
           setStreamError(`获取流信息失败${msg ? `：${msg}` : ''}，将自动匹配最高可用画质`)
         }
