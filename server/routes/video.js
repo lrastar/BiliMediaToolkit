@@ -312,17 +312,23 @@ router.post('/bangumi', async (req, res) => {
 
 router.post('/bangumi/stream', async (req, res) => {
   try {
-    const { ep_id, qn, fnval } = req.body;
-    if (!ep_id) {
-      return res.status(400).json({ code: -1, message: 'ep_id is required' });
+    const { ep_id, bvid, cid, qn } = req.body;
+    if (!ep_id && (!bvid || !cid)) {
+      return res.status(400).json({ code: -1, message: 'ep_id or bvid+cid is required' });
     }
 
-    const data = await getBangumiStream(ep_id, qn || 127, fnval);
-    if (data.code !== 0) {
-      return res.status(400).json({ code: data.code, message: data.message });
+    let playData;
+    if (bvid && cid) {
+      playData = await getStreamUrl(bvid, cid, qn || 127);
+    } else {
+      playData = await getBangumiStream(ep_id, qn || 127);
     }
 
-    const options = parseStreamOptions(data);
+    if (playData.code !== 0) {
+      return res.status(400).json({ code: playData.code, message: playData.message });
+    }
+
+    const options = parseStreamOptions(playData);
     res.json({ code: 0, data: options });
   } catch (err) {
     res.status(500).json({ code: -1, message: err.message });
@@ -346,7 +352,12 @@ router.post('/bangumi/download', async (req, res) => {
         type: 'video',
         title: safeTitle,
         execute: async ({ abortSignal, onProgress }) => {
-          const streamData = await getBangumiStream(task.ep_id, task.qn || 127);
+          let streamData;
+          if (task.bvid && task.cid) {
+            streamData = await getStreamUrl(task.bvid, task.cid, task.qn || 127);
+          } else {
+            streamData = await getBangumiStream(task.ep_id, task.qn || 127);
+          }
           if (streamData.code !== 0) {
             throw new Error(streamData.message || 'Failed to get stream url');
           }

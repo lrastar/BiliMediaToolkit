@@ -131,11 +131,15 @@ export default function BangumiPage() {
 
   const fetchStreamOptions = async (epId) => {
     setStreamError(null)
+    const ep = bangumiInfo?.episodes?.find(e => e.ep_id === epId)
+    const body = ep?.bvid && ep?.cid
+      ? { bvid: ep.bvid, cid: ep.cid, qn: 127 }
+      : { ep_id: epId, qn: 127 }
     try {
       const streamRes = await fetch('/api/video/bangumi/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ep_id: epId, qn: 127 })
+        body: JSON.stringify(body)
       })
       const streamData = await streamRes.json()
       if (streamData.code === 0 && streamData.data) {
