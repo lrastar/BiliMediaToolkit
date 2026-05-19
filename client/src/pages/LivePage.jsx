@@ -4,7 +4,8 @@ export default function LivePage() {
   const [roomInput, setRoomInput] = useState('')
   const [roomInfo, setRoomInfo] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [quality, setQuality] = useState(4)
+  const [quality, setQuality] = useState(10000)
+  const [qualityOptions, setQualityOptions] = useState([])
   const [recording, setRecording] = useState(false)
   const [recordId, setRecordId] = useState(null)
   const [elapsed, setElapsed] = useState(0)
@@ -12,14 +13,6 @@ export default function LivePage() {
   const [history, setHistory] = useState([])
   const timerRef = useRef(null)
   const pollRef = useRef(null)
-
-  const qualityOptions = [
-    { label: '原画', qn: 4 },
-    { label: '蓝光', qn: 3 },
-    { label: '超清', qn: 2 },
-    { label: '高清', qn: 1 },
-    { label: '流畅', qn: 0 }
-  ]
 
   useEffect(() => {
     return () => {
@@ -47,6 +40,7 @@ export default function LivePage() {
     const roomId = extractRoomId(roomInput)
     if (!roomId) return
     setLoading(true)
+    setQualityOptions([])
     try {
       const res = await fetch('/api/live/info', {
         method: 'POST',
@@ -54,8 +48,11 @@ export default function LivePage() {
         body: JSON.stringify({ room_id: roomId })
       })
       const data = await res.json()
-      if (data.code === 0) {
+      if (data.code === 0 && data.data) {
         setRoomInfo(data.data)
+        if (data.data.live_status === 1) {
+          await fetchQualities(roomId)
+        }
       } else {
         setRoomInfo(null)
       }
@@ -66,12 +63,37 @@ export default function LivePage() {
     }
   }
 
+  const fetchQualities = async (roomId) => {
+    try {
+      const res = await fetch('/api/live/qualities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room_id: roomId })
+      })
+      const data = await res.json()
+      if (data.code === 0 && Array.isArray(data.data) && data.data.length > 0) {
+        setQualityOptions(data.data)
+        setQuality(data.data[0].qn)
+      }
+    } catch {}
+  }
+
+  const getQualityLabel = (qn) => {
+    const opt = qualityOptions.find(o => o.qn === qn)
+    if (!opt) return String(qn)
+    const parts = []
+    if (opt.detailDesc) parts.push(opt.detailDesc)
+    else if (opt.desc) parts.push(opt.desc)
+    if (opt.tags?.length) parts.push(opt.tags.join(' '))
+    return parts.join(' ') || opt.desc || String(qn)
+  }
+
   const startRecording = async () => {
     try {
       const res = await fetch('/api/live/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ room_id: extractRoomId(roomInput), quality })
+        body: JSON.stringify({ room_id: extractRoomId(roomInput), quality: parseInt(quality, 10) })
       })
       const data = await res.json()
       if (data.code === 0) {
@@ -164,18 +186,24 @@ export default function LivePage() {
           <select
             value={quality}
             onChange={e => setQuality(e.target.value)}
-            disabled={recording}
-            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-cyan-500 transition"
+            disabled={recording || qualityOptions.length === 0}
+            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-cyan-500 transition min-w-[160px]"
           >
-            {qualityOptions.map(q => (
-              <option key={q.qn} value={q.qn} className="bg-gray-900">{q.label}</option>
-            ))}
+            {qualityOptions.length === 0 ? (
+              <option value="">请先获取直播间信息</option>
+            ) : (
+              qualityOptions.map(q => (
+                <option key={q.qn} value={q.qn} className="bg-gray-900">
+                  {getQualityLabel(q.qn)}
+                </option>
+              ))
+            )}
           </select>
 
           {!recording ? (
             <button
               onClick={startRecording}
-              disabled={!roomInfo || !roomInfo.live_status}
+              disabled={!roomInfo || !roomInfo.live_status || qualityOptions.length === 0}
               className="flex items-center gap-2 px-5 py-2 rounded-xl bg-red-600/80 hover:bg-red-500/80 text-white font-medium transition disabled:opacity-40"
             >
               <span className="w-2.5 h-2.5 rounded-full bg-red-300" />
@@ -201,6 +229,17 @@ export default function LivePage() {
             </div>
           )}
         </div>
+
+        {qualityOptions.length > 0 && (
+          <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+            可用画质：
+            {qualityOptions.map(q => (
+              <span key={q.qn} className={`px-2 py-0.5 rounded ${Number(quality) === q.qn ? 'bg-cyan-600/30 text-cyan-400' : 'bg-white/5 text-gray-400'}`}>
+                {getQualityLabel(q.qn)}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {history.length > 0 && (

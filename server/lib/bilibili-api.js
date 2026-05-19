@@ -264,7 +264,7 @@ export async function getLiveRoomInfo(roomId) {
   return data;
 }
 
-export async function getLiveStreamUrl(roomId, quality = 4) {
+export async function getLiveStreamUrl(roomId, quality = 10000) {
   const params = new URLSearchParams({
     room_id: roomId,
     qn: quality,
@@ -276,4 +276,63 @@ export async function getLiveStreamUrl(roomId, quality = 4) {
   const res = await fetchWithRetry(`https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?${params}`, { headers: getHeaders() });
   const data = await res.json();
   return data;
+}
+
+export function parseLiveQualityOptions(streamData) {
+  const playurl = streamData?.data?.playurl_info?.playurl;
+  const gQnDesc = playurl?.g_qn_desc || [];
+
+  const qualities = gQnDesc.map(q => ({
+    qn: q.qn,
+    desc: q.desc,
+    detailDesc: q.media_base_desc?.detail_desc?.desc || null,
+    briefDesc: q.media_base_desc?.brief_desc?.desc || null,
+    badge: q.media_base_desc?.brief_desc?.badge || null,
+    tags: q.media_base_desc?.detail_desc?.tag || [],
+    hdrType: q.hdr_type || 0
+  }));
+
+  return qualities.sort((a, b) => b.qn - a.qn);
+}
+
+export function extractLiveStreamUrl(streamData, targetQn = 10000) {
+  const playurl = streamData?.data?.playurl_info?.playurl;
+  if (!playurl) return null;
+
+  for (const stream of (playurl.stream || [])) {
+    for (const format of (stream.format || [])) {
+      for (const codec of (format.codec || [])) {
+        if (codec.current_qn === targetQn && codec.url_info?.length && codec.base_url) {
+          const urlInfo = codec.url_info[0];
+          return {
+            url: urlInfo.host + codec.base_url + urlInfo.extra,
+            codecName: codec.codec_name,
+            qn: codec.current_qn,
+            protocol: stream.protocol_name,
+            formatName: format.format_name
+          };
+        }
+      }
+    }
+  }
+
+  const acceptQn = new Set((playurl.g_qn_desc || []).map(q => q.qn));
+  for (const stream of (playurl.stream || [])) {
+    for (const format of (stream.format || [])) {
+      for (const codec of (format.codec || [])) {
+        if ((acceptQn.size === 0 || acceptQn.has(codec.current_qn)) && codec.url_info?.length && codec.base_url) {
+          const urlInfo = codec.url_info[0];
+          return {
+            url: urlInfo.host + codec.base_url + urlInfo.extra,
+            codecName: codec.codec_name,
+            qn: codec.current_qn,
+            protocol: stream.protocol_name,
+            formatName: format.format_name
+          };
+        }
+      }
+    }
+  }
+
+  return null;
 }

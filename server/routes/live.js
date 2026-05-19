@@ -2,7 +2,12 @@ import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import { getLiveRoomInfo, getLiveStreamUrl } from '../lib/bilibili-api.js';
+import {
+  getLiveRoomInfo,
+  getLiveStreamUrl,
+  parseLiveQualityOptions,
+  extractLiveStreamUrl
+} from '../lib/bilibili-api.js';
 import { recordLiveStream } from '../lib/ffmpeg.js';
 import { getConfig } from '../lib/config.js';
 
@@ -37,6 +42,38 @@ router.post('/info', async (req, res) => {
   }
 });
 
+router.post('/qualities', async (req, res) => {
+  try {
+    const { room_id } = req.body;
+    if (!room_id) {
+      return res.status(400).json({ code: -1, message: 'room_id is required' });
+    }
+
+    const roomData = await getLiveRoomInfo(room_id);
+    if (roomData.code !== 0) {
+      return res.status(400).json({ code: roomData.code, message: roomData.msg || roomData.message });
+    }
+
+    if (roomData.data.live_status !== 1) {
+      return res.status(400).json({ code: -1, message: 'Live room is not streaming' });
+    }
+
+    const streamData = await getLiveStreamUrl(roomData.data.room_id, 10000);
+    if (streamData.code !== 0) {
+      return res.status(400).json({ code: streamData.code, message: streamData.message });
+    }
+
+    const qualities = parseLiveQualityOptions(streamData);
+
+    res.json({
+      code: 0,
+      data: qualities
+    });
+  } catch (err) {
+    res.status(500).json({ code: -1, message: err.message });
+  }
+});
+
 router.post('/start', async (req, res) => {
   try {
     const { room_id, quality } = req.body;
@@ -53,44 +90,30 @@ router.post('/start', async (req, res) => {
       return res.status(400).json({ code: -1, message: 'Live room is not streaming' });
     }
 
-    const streamData = await getLiveStreamUrl(roomData.data.room_id, quality || 4);
+    const targetQn = quality || 10000;
+    const streamData = await getLiveStreamUrl(roomData.data.room_id, targetQn);
     if (streamData.code !== 0) {
       return res.status(400).json({ code: streamData.code, message: streamData.message });
     }
 
-    const playInfo = streamData.data?.playurl_info?.playurl;
-    if (!playInfo) {
-      return res.status(500).json({ code: -1, message: 'Failed to get stream url' });
-    }
-
-    let streamUrl = null;
-    for (const stream of playInfo.stream || []) {
-      for (const format of stream.format || []) {
-        for (const codec of format.codec || []) {
-          if (codec.url_info?.length && codec.base_url) {
-            const urlInfo = codec.url_info[0];
-            streamUrl = urlInfo.host + codec.base_url + urlInfo.extra;
-            break;
-          }
-        }
-        if (streamUrl) break;
-      }
-      if (streamUrl) break;
-    }
-
-    if (!streamUrl) {
-      return res.status(500).json({ code: -1, message: 'No available stream url found' });
+    const streamResult = extractLiveStreamUrl(streamData, targetQn);
+    if (!streamResult) {
+      return res.status(500).json({ code: -1, message: 'No available stream url found for requested quality' });
     }
 
     const config = getConfig();
     const id = randomUUID();
     const title = roomData.data.title || `live_${room_id}`;
     const safeTitle = title.replace(/[\\/:*?"<>|]/g, '_');
+
+    const qualDesc = (streamData.data?.playurl_info?.playurl?.g_qn_desc || [])
+      .find(q => q.qn === streamResult.qn)?.desc || String(streamResult.qn);
+
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const fileName = `${safeTitle}_${timestamp}.flv`;
+    const fileName = `${safeTitle}_${timestamp}[${qualDesc}].flv`;
     const outputPath = path.resolve(config.downloadPath, fileName);
 
-    const proc = recordLiveStream(streamUrl, outputPath);
+    const proc = recordLiveStream(streamResult.url, outputPath);
 
     const recording = {
       id,
@@ -120,7 +143,7 @@ router.post('/start', async (req, res) => {
 
     res.json({
       code: 0,
-      data: { recording_id: id, status: 'recording' }
+      data: { recording_id: id, status: 'recording', quality: streamResult.qn, desc: qualDesc }
     });
   } catch (err) {
     res.status(500).json({ code: -1, message: err.message });
